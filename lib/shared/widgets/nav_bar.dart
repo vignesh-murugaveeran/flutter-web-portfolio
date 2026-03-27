@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:responsive_builder/responsive_builder.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../core/utils/constants.dart';
+import 'package:animated_theme_switcher/animated_theme_switcher.dart' as ats;
+import '../../core/theme/app_theme.dart';
 
 class NavBar extends StatelessWidget {
   final Function(int)? onNavTap;
@@ -12,7 +14,7 @@ class NavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return ScreenTypeLayout.builder(
       mobile: (BuildContext context) => MobileNavBar(onNavTap: onNavTap),
-      tablet: (BuildContext context) => DesktopNavBar(onNavTap: onNavTap),
+      tablet: (BuildContext context) => MobileNavBar(onNavTap: onNavTap), // Use MobileNavBar on tablet to prevent row overflow
       desktop: (BuildContext context) => DesktopNavBar(onNavTap: onNavTap),
     );
   }
@@ -24,11 +26,6 @@ class DesktopNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDark = themeProvider.themeMode == ThemeMode.dark ||
-        (themeProvider.themeMode == ThemeMode.system &&
-            MediaQuery.of(context).platformBrightness == Brightness.dark);
-
     return Center(
       child: Container(
         constraints: const BoxConstraints(
@@ -51,12 +48,10 @@ class DesktopNavBar extends StatelessWidget {
                 NavItem(title: 'Home', onTap: () => onNavTap?.call(0)),
                 NavItem(title: 'About', onTap: () => onNavTap?.call(1)),
                 NavItem(title: 'Projects', onTap: () => onNavTap?.call(2)),
-                NavItem(title: 'Contact', onTap: () => onNavTap?.call(3)),
+                NavItem(title: 'Experience', onTap: () => onNavTap?.call(3)),
+                NavItem(title: 'Contact', onTap: () => onNavTap?.call(4)),
                 const SizedBox(width: 24),
-                IconButton(
-                  icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-                  onPressed: () => themeProvider.toggleTheme(),
-                ),
+                const ThemeToggleButton(),
               ],
             ),
           ],
@@ -72,11 +67,6 @@ class MobileNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDark = themeProvider.themeMode == ThemeMode.dark ||
-        (themeProvider.themeMode == ThemeMode.system &&
-            MediaQuery.of(context).platformBrightness == Brightness.dark);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Row(
@@ -92,14 +82,27 @@ class MobileNavBar extends StatelessWidget {
           ),
           Row(
             children: [
-              IconButton(
-                icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-                onPressed: () => themeProvider.toggleTheme(),
-              ),
+              const ThemeToggleButton(),
               IconButton(
                 icon: const Icon(Icons.menu),
                 onPressed: () {
-                  Scaffold.of(context).openEndDrawer();
+                  // Fallback for mobile scrolling
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (ctx) => Container(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(title: const Text('Home'), onTap: () { Navigator.pop(ctx); onNavTap?.call(0); }),
+                          ListTile(title: const Text('About'), onTap: () { Navigator.pop(ctx); onNavTap?.call(1); }),
+                          ListTile(title: const Text('Projects'), onTap: () { Navigator.pop(ctx); onNavTap?.call(2); }),
+                          ListTile(title: const Text('Experience'), onTap: () { Navigator.pop(ctx); onNavTap?.call(3); }),
+                          ListTile(title: const Text('Contact'), onTap: () { Navigator.pop(ctx); onNavTap?.call(4); }),
+                        ],
+                      ),
+                    ),
+                  );
                 },
               ),
             ],
@@ -127,6 +130,55 @@ class NavItem extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
       ),
+    );
+  }
+}
+
+class ThemeToggleButton extends StatelessWidget {
+  const ThemeToggleButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+
+    return ats.ThemeSwitcher(
+      builder: (context) {
+        final currentTheme = Theme.of(context);
+        final isDark = currentTheme.brightness == Brightness.dark;
+
+        return IconButton(
+          onPressed: () {
+            final newTheme = isDark ? AppTheme.lightTheme : AppTheme.darkTheme;
+            
+            ats.ThemeSwitcher.of(context).changeTheme(
+              theme: newTheme,
+              isReversed: isDark,
+            );
+            
+            // Sync with our custom provider
+            themeProvider.setThemeMode(isDark ? ThemeMode.light : ThemeMode.dark);
+          },
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return RotationTransition(
+                turns: Tween<double>(begin: 0.5, end: 1.0).animate(animation),
+                child: ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                ),
+              );
+            },
+            child: Icon(
+              isDark ? Icons.light_mode : Icons.dark_mode,
+              key: ValueKey<bool>(isDark),
+            ),
+          ),
+        );
+      },
     );
   }
 }
